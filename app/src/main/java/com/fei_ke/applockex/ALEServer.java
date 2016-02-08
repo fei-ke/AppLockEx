@@ -1,12 +1,14 @@
 package com.fei_ke.applockex;
 
+import android.app.Service;
 import android.content.BroadcastReceiver;
-import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.net.Uri;
 import android.os.Bundle;
+import android.os.IBinder;
+import android.os.RemoteException;
+import android.support.annotation.Nullable;
 import android.util.Log;
 
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -14,7 +16,6 @@ import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.wearable.Node;
 import com.google.android.gms.wearable.NodeApi;
 import com.google.android.gms.wearable.Wearable;
-import com.google.android.gms.wearable.WearableListenerService;
 
 import java.util.List;
 
@@ -22,10 +23,15 @@ import java.util.List;
  * 主要检测屏幕关闭事件,更新解锁时间
  * Created by fei on 16/2/2.
  */
-public class ALEServer extends WearableListenerService implements GoogleApiClient.ConnectionCallbacks {
+public class ALEServer extends Service implements
+        GoogleApiClient.ConnectionCallbacks,
+        NodeApi.NodeListener {
     private static final String TAG = "ALEServer";
     private BroadcastReceiver mReceiver;
     private GoogleApiClient mGoogleApiClient;
+
+    private long lastUnlockTime = 0;
+    private boolean isSafeLocation = false;
 
     private static final String MY_WATCH_NAME = "HUAWEI WATCH 0C14";
 
@@ -38,6 +44,26 @@ public class ALEServer extends WearableListenerService implements GoogleApiClien
                 .build();
 
         tryConnectGoogleApi();
+    }
+
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        return new AppLockEx.Stub() {
+
+            @Override
+            public boolean isAppNeedLock(String pkgName) throws RemoteException {
+                Log.d(TAG, "isAppNeedLock() called with: " + "pkgName = [" + pkgName + "]");
+                Log.i(TAG, "lastUnlockTime: " + lastUnlockTime + " isSafeLocation: " + isSafeLocation);
+                Log.d(TAG, "isAppNeedLock() returned: " + (lastUnlockTime == 0 && !isSafeLocation));
+                return lastUnlockTime == 0 && !isSafeLocation;
+            }
+
+            @Override
+            public void updateUnlockTime(long time) throws RemoteException {
+                ALEServer.this.updateUnLockTime(time);
+            }
+        };
     }
 
     protected void tryConnectGoogleApi() {
@@ -74,30 +100,21 @@ public class ALEServer extends WearableListenerService implements GoogleApiClien
     }
 
     @Override
-    public void onConnectedNodes(List<Node> connectedNodes) {
-        Log.d(TAG, "onConnectedNodes() called with: " + "connectedNodes = [" + connectedNodes + "]");
-        super.onConnectedNodes(connectedNodes);
-        for (Node node : connectedNodes) {
-            isSafeLocation(node);
-        }
-    }
-
-    @Override
     public void onPeerConnected(Node peer) {
         Log.d(TAG, "onPeerConnected() called with: " + "peer = [" + peer + "]");
-        super.onPeerConnected(peer);
         isSafeLocation(peer);
     }
 
     @Override
     public void onPeerDisconnected(Node peer) {
         Log.d(TAG, "onPeerDisconnected() called with: " + "peer = [" + peer + "]");
-        super.onPeerDisconnected(peer);
         isSafeLocation(peer);
     }
 
     @Override
     public void onConnected(Bundle bundle) {
+        Wearable.NodeApi.addListener(mGoogleApiClient, this);
+
         Wearable.NodeApi.getConnectedNodes(mGoogleApiClient).setResultCallback(new ResultCallback<NodeApi.GetConnectedNodesResult>() {
             @Override
             public void onResult(NodeApi.GetConnectedNodesResult getConnectedNodesResult) {
@@ -120,19 +137,29 @@ public class ALEServer extends WearableListenerService implements GoogleApiClien
         }
     }
 
+    void updateUnLockTime(long time) {
+        Log.d(TAG, "updateUnLockTime() called with: " + "time = [" + time + "]");
+
+        lastUnlockTime = time;
+
+        //ContentValues contentValues = new ContentValues();
+        //contentValues.put(Constants.KEY_LAST_UNLOCK_TIME, time);
+        //getContentResolver().update(Uri.parse(Constants.URI_UPDATE_UNLOCK_TIME), contentValues, null, null);
+    }
+
     private void updateIsSafeLocation(boolean isSafeLocation) {
-        ContentValues contentValues = new ContentValues();
-        contentValues.put(Constants.KEY_IS_SAFE_LOCATION, isSafeLocation);
-        getContentResolver().update(Uri.parse(Constants.URI_UPDATE_IS_SAFE_LOCATION), contentValues, null, null);
+        this.isSafeLocation = isSafeLocation;
+
+        //ContentValues contentValues = new ContentValues();
+        //contentValues.put(Constants.KEY_IS_SAFE_LOCATION, isSafeLocation);
+        //getContentResolver().update(Uri.parse(Constants.URI_UPDATE_IS_SAFE_LOCATION), contentValues, null, null);
     }
 
 
-    private static class ScreenOffDetector extends BroadcastReceiver {
+    private class ScreenOffDetector extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            ContentValues contentValues = new ContentValues();
-            contentValues.put(Constants.KEY_LAST_UNLOCK_TIME, 0);
-            context.getContentResolver().update(Uri.parse(Constants.URI_UPDATE_UNLOCK_TIME), contentValues, null, null);
+            updateUnLockTime(0);
         }
     }
 

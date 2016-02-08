@@ -1,7 +1,6 @@
 package com.fei_ke.applockex.hook;
 
 import android.app.ActivityManager;
-import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
 import android.net.Uri;
@@ -31,6 +30,7 @@ public class HookAppLock implements IXposedHookLoadPackage, IXposedHookZygoteIni
         XposedHelpers.findAndHookMethod(ActivityManager.class, "isAppLockedPackage", String.class,
                 new XC_MethodHook() {
                     private WeakReference<Context> contextReference;
+                    private ALEServiceProxy aleService;
 
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -40,9 +40,11 @@ public class HookAppLock implements IXposedHookLoadPackage, IXposedHookZygoteIni
                                 Context context = (Context) XposedHelpers.getObjectField(param.thisObject, "mContext");
                                 contextReference = new WeakReference<Context>(context);
                                 //XposedBridge.log("ActivityManager:Context= " + context);
+                                aleService = new ALEServiceProxy(context);
                             }
                             String pkgName = (String) param.args[0];
-                            boolean shouldLock = getShouldLockNextTime(contextReference.get(), pkgName);
+                            //boolean shouldLock = getShouldLockNextTime(contextReference.get(), pkgName);
+                            boolean shouldLock = aleService.isAppNeedLock(pkgName);
                             param.setResult(shouldLock);
                         }
                     }
@@ -50,6 +52,7 @@ public class HookAppLock implements IXposedHookLoadPackage, IXposedHookZygoteIni
         XposedHelpers.findAndHookMethod("com.android.internal.app.AppLockPolicy", null, "isAppLockedPackage", String.class,
                 new XC_MethodHook() {
                     private Context context;
+                    private ALEServiceProxy aleService;
 
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) throws Throwable {
@@ -58,10 +61,12 @@ public class HookAppLock implements IXposedHookLoadPackage, IXposedHookZygoteIni
                             if (context == null) {
                                 context = (Context) XposedHelpers.getObjectField(param.thisObject, "mContext");
                                 //XposedBridge.log("AppLockPolicy:Context= " + context);
+                                aleService = new ALEServiceProxy(context);
                             }
 
                             String pkgName = (String) param.args[0];
-                            boolean shouldLock = getShouldLockNextTime(context, pkgName);
+                            //boolean shouldLock = getShouldLockNextTime(context, pkgName);
+                            boolean shouldLock = aleService.isAppNeedLock(pkgName);
                             param.setResult(shouldLock);
                         }
                     }
@@ -93,9 +98,10 @@ public class HookAppLock implements IXposedHookLoadPackage, IXposedHookZygoteIni
                     protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                         //update unlock time
                         Context context = (Context) param.thisObject;
-                        ContentValues contentValues = new ContentValues();
-                        contentValues.put(Constants.KEY_LAST_UNLOCK_TIME, System.currentTimeMillis());
-                        context.getContentResolver().update(Uri.parse(Constants.URI_UPDATE_UNLOCK_TIME), contentValues, null, null);
+                        //ContentValues contentValues = new ContentValues();
+                        //contentValues.put(Constants.KEY_LAST_UNLOCK_TIME, System.currentTimeMillis());
+                        //context.getContentResolver().update(Uri.parse(Constants.URI_UPDATE_UNLOCK_TIME), contentValues, null, null);
+
                     }
                 });
 
