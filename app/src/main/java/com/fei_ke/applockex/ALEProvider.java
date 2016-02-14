@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.net.Uri;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Log;
 
@@ -15,24 +16,30 @@ import android.util.Log;
  */
 public class ALEProvider extends ContentProvider {
     private static final String TAG = "ALEProvider";
-
+    private static final boolean DEBUG = BuildConfig.DEBUG;
     private long lastUnlockTime = 0;
     private boolean isSafeLocation = false;
 
     @Override
     public boolean onCreate() {
-        Log.d(TAG, "onCreate() called with: " + "");
+        if (DEBUG) {
+            Log.d(TAG, "onCreate() called with: " + "");
+        }
 
         Intent intent = new Intent(getContext(), ALEServer.class);
-        getContext().startService(intent);
+        if (getContext() != null) {
+            getContext().startService(intent);
+        }
         return false;
     }
 
     @Nullable
     @Override
-    public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
+    public Cursor query(@NonNull Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
         if (Constants.URI_IS_APP_LOCK.equals(uri.toString())) {
-            Log.i(TAG, "query: selection : " + selection);
+            if (DEBUG) {
+                Log.i(TAG, "query: selection : " + selection);
+            }
             MatrixCursor cursor = new MatrixCursor(new String[]{"isLocked"});
             cursor.newRow().add(isNeedLock() ? 1 : 0);
             return cursor;
@@ -43,38 +50,44 @@ public class ALEProvider extends ContentProvider {
 
     @Nullable
     @Override
-    public String getType(Uri uri) {
+    public String getType(@NonNull Uri uri) {
         return null;
     }
 
     @Nullable
     @Override
-    public Uri insert(Uri uri, ContentValues values) {
+    public Uri insert(@NonNull Uri uri, ContentValues values) {
         return null;
     }
 
     @Override
-    public int delete(Uri uri, String selection, String[] selectionArgs) {
+    public int delete(@NonNull Uri uri, String selection, String[] selectionArgs) {
         return 0;
     }
 
     @Override
-    public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
+    public int update(@NonNull Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         String uriStr = uri.toString();
         if (Constants.URI_UPDATE_UNLOCK_TIME.equals(uriStr)) {
             this.lastUnlockTime = values.getAsLong(Constants.KEY_LAST_UNLOCK_TIME);
-            Log.i(TAG, "update: lastUnlockTime : " + lastUnlockTime);
+            if (DEBUG) {
+                Log.i(TAG, "update: lastUnlockTime : " + lastUnlockTime);
+            }
             return 1;
         } else if (Constants.URI_UPDATE_IS_SAFE_LOCATION.equals(uriStr)) {
             isSafeLocation = values.getAsBoolean(Constants.KEY_IS_SAFE_LOCATION);
-            Log.i(TAG, "update: isSafeLocation : " + isSafeLocation);
+            if (DEBUG) {
+                Log.i(TAG, "update: isSafeLocation : " + isSafeLocation);
+            }
             return 1;
         }
         return 0;
     }
 
     private synchronized boolean isNeedLock() {
-        Log.i(TAG, "lastUnlockTime: " + lastUnlockTime + ",isSafeLocation: " + isSafeLocation);
+        if (DEBUG) {
+            Log.i(TAG, "lastUnlockTime: " + lastUnlockTime + ",isSafeLocation: " + isSafeLocation);
+        }
         return lastUnlockTime == 0 && !isSafeLocation;
     }
 }
