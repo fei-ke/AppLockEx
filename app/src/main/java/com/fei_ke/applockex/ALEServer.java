@@ -1,50 +1,32 @@
 package com.fei_ke.applockex;
 
+import android.app.Service;
 import android.content.BroadcastReceiver;
-import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.net.Uri;
-import android.os.Bundle;
+import android.os.Binder;
+import android.os.IBinder;
+import android.support.annotation.Nullable;
 import android.util.Log;
 
-import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.common.api.ResultCallback;
-import com.google.android.gms.wearable.Node;
-import com.google.android.gms.wearable.NodeApi;
-import com.google.android.gms.wearable.Wearable;
-import com.google.android.gms.wearable.WearableListenerService;
-
-import java.util.List;
+import com.fei_ke.applockex.support.WearableDetector;
 
 /**
  * 主要检测屏幕关闭事件,更新解锁时间
  * Created by fei on 16/2/2.
  */
-public class ALEServer extends WearableListenerService implements GoogleApiClient.ConnectionCallbacks {
+public class ALEServer extends Service {
     private static final String TAG = "ALEServer";
     private BroadcastReceiver mReceiver;
-    private GoogleApiClient mGoogleApiClient;
-
+    private long lastUnlockTime = 0;
+    private WearableDetector wearableDetector;
     private static final String MY_WATCH_NAME = "HUAWEI WATCH 0C14";
 
     @Override
     public void onCreate() {
         super.onCreate();
-        mGoogleApiClient = new GoogleApiClient.Builder(this)
-                .addApi(Wearable.API)
-                .addConnectionCallbacks(this)
-                .build();
-
-        tryConnectGoogleApi();
-    }
-
-    protected void tryConnectGoogleApi() {
-        Log.d(TAG, "tryConnectGoogleApi() called with: " + "");
-        if (!mGoogleApiClient.isConnected() && !mGoogleApiClient.isConnecting()) {
-            mGoogleApiClient.connect();
-        }
+        wearableDetector = new WearableDetector();
     }
 
 
@@ -56,83 +38,56 @@ public class ALEServer extends WearableListenerService implements GoogleApiClien
             IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_OFF);
             registerReceiver(mReceiver, filter);
         }
-        tryConnectGoogleApi();
+        wearableDetector.start(this);
+
         return super.onStartCommand(intent, flags, startId);
     }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
+
+        wearableDetector.stop();
+
         if (mReceiver != null) {
             unregisterReceiver(mReceiver);
         }
 
-        if (mGoogleApiClient.isConnected()) {
-            mGoogleApiClient.disconnect();
-        }
-
     }
 
+    @Nullable
     @Override
-    public void onConnectedNodes(List<Node> connectedNodes) {
-        Log.d(TAG, "onConnectedNodes() called with: " + "connectedNodes = [" + connectedNodes + "]");
-        super.onConnectedNodes(connectedNodes);
-        for (Node node : connectedNodes) {
-            isSafeLocation(node);
-        }
-    }
-
-    @Override
-    public void onPeerConnected(Node peer) {
-        Log.d(TAG, "onPeerConnected() called with: " + "peer = [" + peer + "]");
-        super.onPeerConnected(peer);
-        isSafeLocation(peer);
-    }
-
-    @Override
-    public void onPeerDisconnected(Node peer) {
-        Log.d(TAG, "onPeerDisconnected() called with: " + "peer = [" + peer + "]");
-        super.onPeerDisconnected(peer);
-        isSafeLocation(peer);
-    }
-
-    @Override
-    public void onConnected(Bundle bundle) {
-        Wearable.NodeApi.getConnectedNodes(mGoogleApiClient).setResultCallback(new ResultCallback<NodeApi.GetConnectedNodesResult>() {
-            @Override
-            public void onResult(NodeApi.GetConnectedNodesResult getConnectedNodesResult) {
-                List<Node> nodes = getConnectedNodesResult.getNodes();
-                for (Node node : nodes) {
-                    isSafeLocation(node);
-                }
-            }
-        });
-    }
-
-    @Override
-    public void onConnectionSuspended(int i) {
-        updateIsSafeLocation(false);
-    }
-
-    private void isSafeLocation(Node node) {
-        if (node.getDisplayName().equals(MY_WATCH_NAME)) {
-            updateIsSafeLocation(node.isNearby());
-        }
-    }
-
-    private void updateIsSafeLocation(boolean isSafeLocation) {
-        ContentValues contentValues = new ContentValues();
-        contentValues.put(Constants.KEY_IS_SAFE_LOCATION, isSafeLocation);
-        getContentResolver().update(Uri.parse(Constants.URI_UPDATE_IS_SAFE_LOCATION), contentValues, null, null);
+    public IBinder onBind(Intent intent) {
+        return new ALEBinder();
     }
 
 
-    private static class ScreenOffDetector extends BroadcastReceiver {
+    private boolean isSafeLocation() {
+        return wearableDetector.isSafeLocation(MY_WATCH_NAME);
+    }
+
+    public void updateUnlockTime(long time) {
+        Log.d(TAG, "updateUnlockTime() called with: " + "time = [" + time + "]");
+        lastUnlockTime = time;
+    }
+
+    private class ScreenOffDetector extends BroadcastReceiver {
         @Override
         public void onReceive(Context context, Intent intent) {
-            ContentValues contentValues = new ContentValues();
-            contentValues.put(Constants.KEY_LAST_UNLOCK_TIME, 0);
-            context.getContentResolver().update(Uri.parse(Constants.URI_UPDATE_UNLOCK_TIME), contentValues, null, null);
+            updateUnlockTime(0);
+        }
+    }
+
+    public class ALEBinder extends Binder {
+        public boolean isNeedLock(String pkgName) {
+            Log.d(TAG, "isNeedLock() called with: " + "pkgName = [" + pkgName + "]");
+            boolean safeLocation = isSafeLocation();
+            Log.d(TAG, "isNeedLock() lastUnlockTime: " + lastUnlockTime + ", isSafeLocation: " + safeLocation);
+            return lastUnlockTime == 0 && !safeLocation;
+        }
+
+        public void updateUnlockTime(long time) {
+            ALEServer.this.updateUnlockTime(time);
         }
     }
 

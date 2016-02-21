@@ -1,11 +1,15 @@
 package com.fei_ke.applockex;
 
+import android.content.ComponentName;
 import android.content.ContentProvider;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.net.Uri;
+import android.os.IBinder;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.util.Log;
@@ -17,8 +21,19 @@ import android.util.Log;
 public class ALEProvider extends ContentProvider {
     private static final String TAG = "ALEProvider";
     private static final boolean DEBUG = BuildConfig.DEBUG;
-    private long lastUnlockTime = 0;
-    private boolean isSafeLocation = false;
+
+    private ALEServer.ALEBinder aleBinder;
+    private ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            aleBinder = (ALEServer.ALEBinder) service;
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            aleBinder = null;
+        }
+    };
 
     @Override
     public boolean onCreate() {
@@ -26,9 +41,9 @@ public class ALEProvider extends ContentProvider {
             Log.d(TAG, "onCreate() called with: " + "");
         }
 
-        Intent intent = new Intent(getContext(), ALEServer.class);
         if (getContext() != null) {
-            getContext().startService(intent);
+            Intent intent = new Intent(getContext(), ALEServer.class);
+            getContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
         }
         return false;
     }
@@ -41,7 +56,7 @@ public class ALEProvider extends ContentProvider {
                 Log.i(TAG, "query: selection : " + selection);
             }
             MatrixCursor cursor = new MatrixCursor(new String[]{"isLocked"});
-            cursor.newRow().add(isNeedLock() ? 1 : 0);
+            cursor.newRow().add((aleBinder != null && aleBinder.isNeedLock(selection)) ? 1 : 0);
             return cursor;
         } else {
             return null;
@@ -69,25 +84,13 @@ public class ALEProvider extends ContentProvider {
     public int update(@NonNull Uri uri, ContentValues values, String selection, String[] selectionArgs) {
         String uriStr = uri.toString();
         if (Constants.URI_UPDATE_UNLOCK_TIME.equals(uriStr)) {
-            this.lastUnlockTime = values.getAsLong(Constants.KEY_LAST_UNLOCK_TIME);
-            if (DEBUG) {
-                Log.i(TAG, "update: lastUnlockTime : " + lastUnlockTime);
-            }
-            return 1;
-        } else if (Constants.URI_UPDATE_IS_SAFE_LOCATION.equals(uriStr)) {
-            isSafeLocation = values.getAsBoolean(Constants.KEY_IS_SAFE_LOCATION);
-            if (DEBUG) {
-                Log.i(TAG, "update: isSafeLocation : " + isSafeLocation);
+            long lastUnlockTime = values.getAsLong(Constants.KEY_LAST_UNLOCK_TIME);
+            if (aleBinder != null) {
+                aleBinder.updateUnlockTime(lastUnlockTime);
             }
             return 1;
         }
         return 0;
     }
 
-    private synchronized boolean isNeedLock() {
-        if (DEBUG) {
-            Log.i(TAG, "lastUnlockTime: " + lastUnlockTime + ",isSafeLocation: " + isSafeLocation);
-        }
-        return lastUnlockTime == 0 && !isSafeLocation;
-    }
 }

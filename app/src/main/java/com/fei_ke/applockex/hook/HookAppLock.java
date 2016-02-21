@@ -30,33 +30,14 @@ public class HookAppLock implements IXposedHookLoadPackage, IXposedHookZygoteIni
     public void initZygote(StartupParam startupParam) throws Throwable {
         MODULE_PATH = startupParam.modulePath;
 
-        //XposedHelpers.findAndHookMethod(ActivityManager.class, "isAppLockedPackage", String.class,
-        //        new XC_MethodHook() {
-        //            private WeakReference<Context> contextReference;
-        //
-        //            @Override
-        //            protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-        //                boolean result = (boolean) param.getResult();
-        //                if (result) {
-        //                    if (contextReference == null || contextReference.get() == null) {
-        //                        Context context = (Context) XposedHelpers.getObjectField(param.thisObject, "mContext");
-        //                        contextReference = new WeakReference<Context>(context);
-        //                        //XposedBridge.log("ActivityManager:Context= " + context);
-        //                    }
-        //                    String pkgName = (String) param.args[0];
-        //                    boolean shouldLock = getShouldLockNextTime(contextReference.get(), pkgName);
-        //                    param.setResult(shouldLock);
-        //                }
-        //            }
-        //        });
         XposedHelpers.findAndHookMethod("com.android.internal.app.AppLockPolicy", null, "isAppLockedPackage", String.class,
                 new XC_MethodHook() {
                     private Context context;
 
                     @Override
                     protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                        boolean result = (boolean) param.getResult();
-                        if (result) {
+                        boolean locked = (boolean) param.getResult();
+                        if (locked) {
                             if (context == null) {
                                 context = (Context) XposedHelpers.getObjectField(param.thisObject, "mContext");
                                 if (DEBUG) {
@@ -77,19 +58,12 @@ public class HookAppLock implements IXposedHookLoadPackage, IXposedHookZygoteIni
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam loadPackageParam) throws Throwable {
-        if (loadPackageParam.packageName.equals(Constants.APP_LPCK_PKG_NAME)) {
+        if (loadPackageParam.packageName.equals(Constants.APP_LOCK_PKG_NAME)) {
             //hookLog(loadPackageParam);
             hookAppLock(loadPackageParam);
         }
     }
 
-    //@Override
-    //public void handleInitPackageResources(XC_InitPackageResources.InitPackageResourcesParam resparam) throws Throwable {
-    //    if (!Constants.APP_LPCK_PKG_NAME.equals(resparam.packageName)) return;
-    //
-    //    XModuleResources modRes = XModuleResources.createInstance(MODULE_PATH, resparam.res);
-    //    resparam.res.setReplacement(Constants.APP_LPCK_PKG_NAME, "anim", "in_from_bottom_to_top", modRes.fwd(R.anim.in_anim));
-    //}
 
     private void hookAppLock(XC_LoadPackage.LoadPackageParam loadPackageParam) {
         XposedHelpers.findAndHookMethod("com.samsung.android.applock.AppLockConfirmActivity", loadPackageParam.classLoader, "verifySuccess",
