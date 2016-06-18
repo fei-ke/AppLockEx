@@ -18,18 +18,9 @@
             </intent-filter>
         </activity>
 
-        <provider
-            android:enabled="true"
-            android:exported="true"
-            android:authorities="com.fei_ke.applockex.ALEProvider"
-            android:name=".ALEProvider"/>
-
-        <service android:name=".ALEServer">
+        <service android:name=".WearableService">
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.BIND_LISTENER"/>
-            </intent-filter>
-            <intent-filter>
-                <action android:name="com.fei_ke.applockex.ALEService"/>
             </intent-filter>
         </service>
 

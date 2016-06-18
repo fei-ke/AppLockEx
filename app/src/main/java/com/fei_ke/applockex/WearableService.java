@@ -10,30 +10,26 @@ import android.os.IBinder;
 import android.os.RemoteException;
 import android.support.annotation.Nullable;
 import android.util.Log;
-
+import com.fei_ke.applockex.hook.ALEService;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.ResultCallback;
 import com.google.android.gms.wearable.Node;
 import com.google.android.gms.wearable.NodeApi;
 import com.google.android.gms.wearable.Wearable;
-
 import java.util.List;
 
 /**
  * 主要检测屏幕关闭事件,更新解锁时间
  * Created by fei on 16/2/2.
  */
-public class ALEServer extends Service implements
+public class WearableService extends Service implements
         GoogleApiClient.ConnectionCallbacks,
         NodeApi.NodeListener {
-    private static final String TAG = "ALEServer";
+    private static final String TAG = "WearableService";
     private BroadcastReceiver mReceiver;
     private GoogleApiClient mGoogleApiClient;
 
-    private long lastUnlockTime = 0;
-    private boolean isSafeLocation = false;
-
-    private static final String MY_WATCH_NAME = "HUAWEI WATCH 0C14";
+    private static final String MY_WATCH_NAME = "HUAWEI WATCH 0637";
 
     @Override
     public void onCreate() {
@@ -49,21 +45,7 @@ public class ALEServer extends Service implements
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
-        return new AppLockEx.Stub() {
-
-            @Override
-            public boolean isAppNeedLock(String pkgName) throws RemoteException {
-                Log.d(TAG, "isAppNeedLock() called with: " + "pkgName = [" + pkgName + "]");
-                Log.i(TAG, "lastUnlockTime: " + lastUnlockTime + " isSafeLocation: " + isSafeLocation);
-                Log.d(TAG, "isAppNeedLock() returned: " + (lastUnlockTime == 0 && !isSafeLocation));
-                return lastUnlockTime == 0 && !isSafeLocation;
-            }
-
-            @Override
-            public void updateUnlockTime(long time) throws RemoteException {
-                ALEServer.this.updateUnLockTime(time);
-            }
-        };
+        return null;
     }
 
     protected void tryConnectGoogleApi() {
@@ -140,19 +122,20 @@ public class ALEServer extends Service implements
     void updateUnLockTime(long time) {
         Log.d(TAG, "updateUnLockTime() called with: " + "time = [" + time + "]");
 
-        lastUnlockTime = time;
-
-        //ContentValues contentValues = new ContentValues();
-        //contentValues.put(Constants.KEY_LAST_UNLOCK_TIME, time);
-        //getContentResolver().update(Uri.parse(Constants.URI_UPDATE_UNLOCK_TIME), contentValues, null, null);
+        try {
+            ALEService.getService().updateUnlockTime(time);
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
     }
 
     private void updateIsSafeLocation(boolean isSafeLocation) {
-        this.isSafeLocation = isSafeLocation;
-
-        //ContentValues contentValues = new ContentValues();
-        //contentValues.put(Constants.KEY_IS_SAFE_LOCATION, isSafeLocation);
-        //getContentResolver().update(Uri.parse(Constants.URI_UPDATE_IS_SAFE_LOCATION), contentValues, null, null);
+        Log.d(TAG, "updateIsSafeLocation() called with: " + "isSafeLocation = [" + isSafeLocation + "]");
+        try {
+            ALEService.getService().updateIsSafeLocation(isSafeLocation);
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
     }
 
 

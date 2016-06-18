@@ -10,6 +10,6 @@ import android.content.Intent;
 public class ALEReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
-        context.startService(new Intent(context, ALEServer.class));
+        context.startService(new Intent(context, WearableService.class));
     }
 }
